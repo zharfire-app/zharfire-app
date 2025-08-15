@@ -1,0 +1,20 @@
+{
+  "homepage": "https://zharfire-app.github.io/zharfire-app",
+  "name": "zharfire",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    // your dependencies here
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
+  }
+  "scripts": {
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d build",
+  "start": "react-scripts start",
+  "build": "react-scripts build",
+  "test": "react-scripts test",
+  "eject": "react-scripts eject"
+  }
+}
