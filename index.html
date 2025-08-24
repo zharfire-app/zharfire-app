@@ -2,96 +2,92 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Satellite Plots</title>
+  <title>Satellite Dashboard</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 40px;
+      margin: 0;
       background: #f9f9f9;
-      color: #333;
     }
-
     h1 {
       text-align: center;
-      margin-bottom: 40px;
+      padding: 20px;
+      margin: 0;
+      background: #007acc;
+      color: white;
     }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 25px;
+    .tabs {
+      display: flex;
+      justify-content: center;
+      background: #eee;
+      border-bottom: 2px solid #ccc;
     }
-
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 15px;
-      text-align: center;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      transition: transform 0.2s, box-shadow 0.2s;
+    .tabs button {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      font-size: 16px;
+      cursor: pointer;
     }
-
-    .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-    }
-
-    .card img {
-      max-width: 100%;
-      height: 180px;
-      object-fit: cover;
-      border-radius: 8px;
-      margin-bottom: 12px;
-    }
-
-    .card a {
-      text-decoration: none;
-      color: #007acc;
-      font-size: 18px;
+    .tabs button.active {
+      border-bottom: 3px solid #007acc;
       font-weight: bold;
+      color: #007acc;
+    }
+    .tab-content {
+      display: none;
+      padding: 20px;
+    }
+    .tab-content.active {
       display: block;
+    }
+    iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
   </style>
 </head>
 <body>
-  <h1>Satellite Interactive Plots</h1>
-  <div class="grid">
-    <div class="card">
-      <a href="globe_tracks.html">
-        <img src="thumbnails/globe_tracks.png" alt="Globe View">
-        🌍 Globe View
-      </a>
-    </div>
-    <div class="card">
-      <a href="ground_tracks.html">
-        <img src="thumbnails/ground_tracks.png" alt="Ground Tracks">
-        🛰 Ground Tracks
-      </a>
-    </div>
-    <div class="card">
-      <a href="historical_orbital_parameters.html">
-        <img src="thumbnails/historical_orbital_parameters.png" alt="Altitude History">
-        📈 Altitude History
-      </a>
-    </div>
-    <div class="card">
-      <a href="satellite_altitude_by_category.html">
-        <img src="thumbnails/satellite_altitude_by_category.png" alt="Satellite Category">
-        🗂 Satellite Category
-      </a>
-    </div>
-    <div class="card">
-      <a href="orbital_distributions_titles_higher.html">
-        <img src="thumbnails/orbital_distributions_titles_higher.png" alt="Orbital Distribution">
-        🌌 Orbital Distribution
-      </a>
-    </div>
-    <div class="card">
-      <a href="starlink_interactive_satellite_plot.html">
-        <img src="thumbnails/starlink_interactive_satellite_plot.png" alt="Interactive Satellite Plot">
-        ⭐ Interactive Satellite Plot
-      </a>
-    </div>
+  <h1>Satellite Dashboard</h1>
+
+  <div class="tabs">
+    <button onclick="showTab('globe')" class="active">🌍 Globe View</button>
+    <button onclick="showTab('ground')">🛰 Ground Tracks</button>
+    <button onclick="showTab('altitude')">📈 Altitude History</button>
+    <button onclick="showTab('category')">🗂 Satellite Category</button>
+    <button onclick="showTab('distribution')">🌌 Orbital Distribution</button>
+    <button onclick="showTab('starlink')">⭐ Starlink Plot</button>
   </div>
+
+  <div id="globe" class="tab-content active">
+    <iframe src="globe_tracks.html"></iframe>
+  </div>
+  <div id="ground" class="tab-content">
+    <iframe src="ground_tracks.html"></iframe>
+  </div>
+  <div id="altitude" class="tab-content">
+    <iframe src="historical_orbital_parameters.html"></iframe>
+  </div>
+  <div id="category" class="tab-content">
+    <iframe src="satellite_altitude_by_category.html"></iframe>
+  </div>
+  <div id="distribution" class="tab-content">
+    <iframe src="orbital_distributions_titles_higher.html"></iframe>
+  </div>
+  <div id="starlink" class="tab-content">
+    <iframe src="starlink_interactive_satellite_plot.html"></iframe>
+  </div>
+
+  <script>
+    function showTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(div => div.classList.remove('active'));
+      document.querySelectorAll('.tabs button').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
 </body>
 </html>
