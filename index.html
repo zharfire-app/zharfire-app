@@ -18,14 +18,14 @@
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 25px;
     }
 
     .card {
       background: white;
       border-radius: 12px;
-      padding: 20px;
+      padding: 15px;
       text-align: center;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
       transition: transform 0.2s, box-shadow 0.2s;
@@ -34,6 +34,14 @@
     .card:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+
+    .card img {
+      max-width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 12px;
     }
 
     .card a {
@@ -48,12 +56,42 @@
 <body>
   <h1>Satellite Interactive Plots</h1>
   <div class="grid">
-    <div class="card"><a href="globe_tracks.html">🌍 Globe View</a></div>
-    <div class="card"><a href="ground_tracks.html">🛰 Ground Tracks</a></div>
-    <div class="card"><a href="historical_orbital_parameters.html">📈 Altitude History</a></div>
-    <div class="card"><a href="satellite_altitude_by_category.html">🗂 Satellite Category</a></div>
-    <div class="card"><a href="orbital_distributions_titles_higher.html">🌌 Orbital Distribution</a></div>
-    <div class="card"><a href="starlink_interactive_satellite_plot.html">⭐ Interactive Satellite Plot</a></div>
+    <div class="card">
+      <a href="globe_tracks.html">
+        <img src="thumbnails/globe_tracks.png" alt="Globe View">
+        🌍 Globe View
+      </a>
+    </div>
+    <div class="card">
+      <a href="ground_tracks.html">
+        <img src="thumbnails/ground_tracks.png" alt="Ground Tracks">
+        🛰 Ground Tracks
+      </a>
+    </div>
+    <div class="card">
+      <a href="historical_orbital_parameters.html">
+        <img src="thumbnails/historical_orbital_parameters.png" alt="Altitude History">
+        📈 Altitude History
+      </a>
+    </div>
+    <div class="card">
+      <a href="satellite_altitude_by_category.html">
+        <img src="thumbnails/satellite_altitude_by_category.png" alt="Satellite Category">
+        🗂 Satellite Category
+      </a>
+    </div>
+    <div class="card">
+      <a href="orbital_distributions_titles_higher.html">
+        <img src="thumbnails/orbital_distributions_titles_higher.png" alt="Orbital Distribution">
+        🌌 Orbital Distribution
+      </a>
+    </div>
+    <div class="card">
+      <a href="starlink_interactive_satellite_plot.html">
+        <img src="thumbnails/starlink_interactive_satellite_plot.png" alt="Interactive Satellite Plot">
+        ⭐ Interactive Satellite Plot
+      </a>
+    </div>
   </div>
 </body>
 </html>
