@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Plotly Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #fafafa; }
+    h1 { text-align: center; margin-bottom: 30px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 20px; }
+    .plot { width: 100%; height: 500px; border: 1px solid #ccc;
+            border-radius: 8px; background: white; box-shadow: 0px 2px 6px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+
+  <h1>My Interactive Plotly Dashboard</h1>
+  <div class="grid">
+    <div id="plot1" class="plot"></div>
+    <div id="plot2" class="plot"></div>
+    <div id="plot3" class="plot"></div>
+    <div id="plot4" class="plot"></div>
+  </div>
+
+  <script>
+    async function loadPlot(divId, file) {
+      const response = await fetch(file);
+      const fig = await response.json();
+      Plotly.newPlot(divId, fig.data, fig.layout);
+    }
+    loadPlot('plot1', 'plot1.json');
+    loadPlot('plot2', 'plot2.json');
+    loadPlot('plot3', 'plot3.json');
+    loadPlot('plot4', 'plot4.json');
+  </script>
+
+</body>
+</html>
