@@ -80,26 +80,45 @@
 
     /* Tab content */
     .tab-content {
-      display: none;
-      padding: 20px;
-      transition: opacity 0.3s ease;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity 0.5s ease, max-height 0.5s ease;
     }
 
     .tab-content.active {
-      display: block;
       opacity: 1;
+      max-height: 2000px; /* enough for large iframes */
+    }
+
+    .card {
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.7);
+      background: #2a2a2a;
+    }
+
+    .card h3 {
+      margin-top: 0;
+      color: #f0f0f0;
     }
 
     iframe {
       width: 100%;
-      height: 600px;
       border: none;
       border-radius: 8px;
       background: #000;
       transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
     }
 
-    .tab-content iframe:hover {
+    iframe:hover {
       transform: translateY(-3px);
       box-shadow: 0 6px 18px rgba(0,0,0,0.6);
       filter: brightness(1.1);
@@ -136,31 +155,48 @@
 </div>
 
 <div id="globe" class="tab-content active">
-  <iframe src="globe_tracks.html"></iframe>
+  <div class="card"><h3>🌍 Globe View</h3><iframe src="globe_tracks.html"></iframe></div>
 </div>
 <div id="ground" class="tab-content">
-  <iframe src="ground_tracks.html"></iframe>
+  <div class="card"><h3>🛰 Ground Tracks</h3><iframe src="ground_tracks.html"></iframe></div>
 </div>
 <div id="altitude" class="tab-content">
-  <iframe src="historical_orbital_parameters.html"></iframe>
+  <div class="card"><h3>📈 Altitude History</h3><iframe src="historical_orbital_parameters.html"></iframe></div>
 </div>
 <div id="category" class="tab-content">
-  <iframe src="satellite_altitude_by_category.html"></iframe>
+  <div class="card"><h3>🗂 Satellite Category</h3><iframe src="satellite_altitude_by_category.html"></iframe></div>
 </div>
 <div id="distribution" class="tab-content">
-  <iframe src="orbital_distributions_titles_higher.html"></iframe>
+  <div class="card"><h3>🌌 Orbital Distribution</h3><iframe src="orbital_distributions_titles_higher.html"></iframe></div>
 </div>
 <div id="starlink" class="tab-content">
-  <iframe src="starlink_interactive_satellite_plot.html"></iframe>
+  <div class="card"><h3>⭐ Interactive Starlink Plot</h3><iframe src="starlink_interactive_satellite_plot.html"></iframe></div>
 </div>
 
 <script>
-function showTab(tabId) {
-  document.querySelectorAll('.tab-content').forEach(div => div.classList.remove('active'));
-  document.querySelectorAll('.tabs button').forEach(btn => btn.classList.remove('active'));
-  document.getElementById(tabId).classList.add('active');
-  event.currentTarget.classList.add('active');
-}
+  // Tab switching with fade effect
+  function showTab(tabId) {
+    const contents = document.querySelectorAll('.tab-content');
+    const buttons = document.querySelectorAll('.tabs button');
+
+    contents.forEach(div => div.classList.remove('active'));
+    buttons.forEach(btn => btn.classList.remove('active'));
+
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  // Listen for iframe height messages for adaptive sizing
+  window.addEventListener('message', function(event) {
+    if (event.data.type === 'setHeight') {
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach(iframe => {
+        if (iframe.contentWindow === event.source) {
+          iframe.style.height = event.data.height + 'px';
+        }
+      });
+    }
+  });
 </script>
 
 </body>
