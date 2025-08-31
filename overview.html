@@ -1,115 +1,84 @@
-<!DOCTYPE html>
-<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Satellite Overview</title>
-<style>
-  body { margin: 0; background: #000; overflow: hidden; }
-  #globeViz { width: 100vw; height: 100vh; }
-  .info {
-    position: fixed;
-    top: 10px; left: 10px;
-    color: white;
-    font-family: Arial, sans-serif;
-    background: rgba(0,0,0,0.5);
-    padding: 8px 12px;
-    border-radius: 6px;
-  }
-</style>
+  <style>
+    body { margin: 0; }
+
+    #time-log {
+      position: absolute;
+      font-size: 12px;
+      font-family: sans-serif;
+      padding: 5px;
+      border-radius: 3px;
+      background-color: rgba(200, 200, 200, 0.1);
+      color: lavender;
+      bottom: 10px;
+      right: 10px;
+    }
+  </style>
+
+  <script src="//cdn.jsdelivr.net/npm/globe.gl"></script>
+<!--  <script src="../../dist/globe.gl.js"></script>-->
 </head>
+
 <body>
-<div id="globeViz"></div>
-<div class="info">Satellite Overview - Stations (CelesTrak)</div>
+  <div id="chart"></div>
+  <div id="time-log"></div>
 
-<!-- Libraries -->
-<script src="https://unpkg.com/three/build/three.min.js"></script>
-<script src="https://unpkg.com/three-globe"></script>
-<script src="https://unpkg.com/satellite.js/dist/satellite.min.js"></script>
+  <script type="module">
+    import * as satellite from 'https://esm.sh/satellite.js';
 
-<script>
-// --- Initialize Globe ---
-const Globe = new ThreeGlobe()
-  .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-  .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png');
+    const EARTH_RADIUS_KM = 6371; // km
+    const TIME_STEP = 3 * 1000; // per frame
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera();
-camera.aspect = window.innerWidth / window.innerHeight;
-camera.updateProjectionMatrix();
-const renderer = new THREE.WebGLRenderer({antialias: true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.getElementById('globeViz').appendChild(renderer.domElement);
-scene.add(Globe);
+    const timeLogger = document.getElementById('time-log');
 
-// Light
-const light = new THREE.AmbientLight(0xffffff, 1.0);
-scene.add(light);
+    const world = new Globe(document.getElementById('chart'))
+      .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
+      .particleLat('lat')
+      .particleLng('lng')
+      .particleAltitude('alt')
+      .particlesColor(() => 'palegreen');
 
-// --- Fetch TLE data ---
-fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle')
-  .then(res => res.text())
-  .then(data => {
-    const satellites = parseTLEData(data);
-    animateSatellites(satellites);
-  });
+    setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
-// --- Parse TLE ---
-function parseTLEData(data) {
-  const lines = data.trim().split('\n');
-  const sats = [];
-  for (let i = 0; i < lines.length; i += 3) {
-    const name = lines[i].trim();
-    const line1 = lines[i+1].trim();
-    const line2 = lines[i+2].trim();
-    sats.push({name, line1, line2});
-  }
-  return sats;
-}
+    fetch('../datasets/space-track-leo.txt').then(r => r.text()).then(rawData => {
+      const tleData = rawData.replace(/\r/g, '')
+        .split(/\n(?=[^12])/)
+        .filter(d => d)
+        .map(tle => tle.split('\n'));
+      const satData = tleData.map(([name, ...tle]) => ({
+        satrec: satellite.twoline2satrec(...tle),
+        name: name.trim().replace(/^0 /, '')
+      }))
+      // exclude those that can't be propagated
+      .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
 
-// --- Convert TLE to Lat/Lon using satellite.js ---
-function getSatellitePosition(satrec, date) {
-  const positionAndVelocity = satellite.propagate(satrec, date);
-  const gmst = satellite.gstime(date);
-  const latLon = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
-  const lat = satellite.degreesLat(latLon.latitude);
-  const lon = satellite.degreesLong(latLon.longitude);
-  const alt = latLon.height;
-  return {lat, lng: lon, alt};
-}
+      // time ticker
+      let time = new Date();
+      (function frameTicker() {
+        requestAnimationFrame(frameTicker);
 
-// --- Animate satellites ---
-function animateSatellites(sats) {
-  // Create satellite records
-  const satRecords = sats.map(s => satellite.twoline2satrec(s.line1, s.line2));
-  const pointsData = satRecords.map(s => ({lat: 0, lng: 0, size: 5, color: 'red'}));
-  Globe.pointsData(pointsData);
+        time = new Date(+time + TIME_STEP);
+        timeLogger.innerText = time.toString();
 
-  function updatePositions() {
-    const now = new Date();
-    satRecords.forEach((s, i) => {
-      const pos = getSatellitePosition(s, now);
-      pointsData[i].lat = pos.lat;
-      pointsData[i].lng = pos.lng;
+        // Update satellite positions
+        const gmst = satellite.gstime(time);
+        satData.forEach(d => {
+          const eci = satellite.propagate(d.satrec, time);
+          if (eci?.position) {
+            const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+            d.lat = satellite.radiansToDegrees(gdPos.latitude);
+            d.lng = satellite.radiansToDegrees(gdPos.longitude);
+            d.alt = gdPos.height / EARTH_RADIUS_KM;
+          } else {
+            // explicitly handle invalid position
+            d.lat = NaN;
+            d.lng = NaN;
+            d.alt = NaN;
+          }
+        });
+
+        world.particlesData([satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt))]);
+      })();
     });
-    Globe.pointsData(pointsData);
-  }
-
-  // Rotate camera slowly
-  function animate() {
-    requestAnimationFrame(animate);
-    updatePositions();
-    Globe.rotateY(0.001);
-    renderer.render(scene, camera);
-  }
-  animate();
-}
-
-// --- Resize handler ---
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-</script>
+  </script>
 </body>
-</html>
