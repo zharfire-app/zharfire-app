@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Kuiper Satellites – Realistic Orbits</title>
+  <title>Kuiper Satellites – Realistic Orbits (JSON)</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; }
     #chart { width: 100%; height: 100%; }
@@ -22,46 +22,50 @@
     import * as satellite from 'https://esm.sh/satellite.js';
 
     const EARTH_RADIUS_KM = 6371;
-    const STEP_MS = 5000; 
-    const ORBIT_SPAN_MIN = 100;
-    const ORBIT_STEP_MIN = 1;
-    const PATH_REFRESH_EVERY_FRAMES = 30;
+    const STEP_MS = 5000;                 // simulation time step (5 s/frame)
+    const ORBIT_SPAN_MIN = 100;           // total minutes to display orbit path
+    const ORBIT_STEP_MIN = 2;             // orbit path resolution
+    const PATH_REFRESH_EVERY_FRAMES = 20; // recompute paths every N frames
 
     const timeLog = document.getElementById('time-log');
 
+    // ---- globe setup
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
       .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
       .showAtmosphere(true)
       .atmosphereColor('#7aa9ff')
-      .atmosphereAltitude(0.2)
+      .atmosphereAltitude(0.25)
       .backgroundColor('#000000')
+      // satellites (points)
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude('alt')
-      .pointColor(() => 'crimson')
-      .pointRadius(2.0)  <!-- made bigger so you see them -->
+      .pointColor(() => 'red')
+      .pointRadius(1.4)
       .pointResolution(16)
+      // orbit paths (lines)
       .pathsData([])
       .pathPoints('coords')
       .pathPointLat(p => p[0])
       .pathPointLng(p => p[1])
       .pathPointAltitude(p => p[2])
       .pathColor(() => 'cyan')
-      .pathStroke(0.6)
+      .pathStroke(0.7)
       .pathsTransitionDuration(0);
 
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.5;
-    setTimeout(() => world.pointOfView({ altitude: 3.2 }), 100);
+    world.controls().autoRotateSpeed = 0.4;
+    setTimeout(() => world.pointOfView({ altitude: 3.5 }), 1000);
 
+    // ---- helpers
     function getPosLLA(satrec, date) {
       const pv = satellite.propagate(satrec, date);
       if (!pv?.position) return null;
       const gmst = satellite.gstime(date);
       const gd = satellite.eciToGeodetic(pv.position, gmst);
-      const lat = satellite.radiansToDegrees(gd.latitude);
-      let lng = satellite.radiansToDegrees(gd.longitude);
+      const lat = satellite.degreesLat(gd.latitude);
+      let lng = satellite.degreesLong(gd.longitude);
       if (lng > 180) lng -= 360;
       if (lng < -180) lng += 360;
       const altFrac = (gd.height || 0) / EARTH_RADIUS_KM;
@@ -82,8 +86,7 @@
         const pt = points[i];
         if (seg.length) {
           const prev = seg[seg.length - 1];
-          const dLng = Math.abs(pt[1] - prev[1]);
-          if (dLng > 180) {
+          if (Math.abs(pt[1] - prev[1]) > 180) {
             segments.push({ coords: seg });
             seg = [];
           }
@@ -94,16 +97,14 @@
       return segments;
     }
 
-    const TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle';
+    // ---- main
+    const TLE_JSON_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=json';
 
-    fetch(TLE_URL).then(r => r.text()).then(raw => {
-      const sets = raw.replace(/\r/g, '').trim().split(/\n(?=[^12])/).filter(Boolean)
-        .map(block => block.split('\n'));
-      const sats = sets.map(([name, l1, l2]) => ({
-        name: name.trim().replace(/^0 /, ''),
-        satrec: satellite.twoline2satrec(l1.trim(), l2.trim())
-      }))
-      .filter(s => !!satellite.propagate(s.satrec, new Date())?.position);
+    fetch(TLE_JSON_URL).then(r => r.json()).then(data => {
+      const sats = data.map(obj => ({
+        name: obj.OBJECT_NAME,
+        satrec: satellite.twoline2satrec(obj.TLE_LINE1, obj.TLE_LINE2)
+      })).filter(s => !!satellite.propagate(s.satrec, new Date())?.position);
 
       let simTime = new Date();
       const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 }));
@@ -130,8 +131,7 @@
         if (frame % PATH_REFRESH_EVERY_FRAMES === 0) {
           const paths = [];
           for (const s of sats) {
-            const segs = buildOrbitSegments(s.satrec, simTime);
-            paths.push(...segs);
+            paths.push(...buildOrbitSegments(s.satrec, simTime));
           }
           world.pathsData(paths);
         }
