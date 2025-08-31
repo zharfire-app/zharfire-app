@@ -81,14 +81,13 @@
     /* Tab content */
     .tab-content {
       opacity: 0;
-      max-height: 0;
-      overflow: hidden;
-      transition: opacity 0.5s ease, max-height 0.5s ease;
+      display: none; /* hide inactive tabs */
+      transition: opacity 0.5s ease;
     }
 
     .tab-content.active {
       opacity: 1;
-      max-height: 2000px; /* enough for large iframes */
+      display: block; /* show active tab */
     }
 
     .card {
@@ -97,6 +96,7 @@
       padding: 10px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.5);
       transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      margin-bottom: 20px;
     }
 
     .card:hover {
@@ -174,7 +174,7 @@
 </div>
 
 <script>
-  // Tab switching with fade effect
+  // Tab switching with fade
   function showTab(tabId) {
     const contents = document.querySelectorAll('.tab-content');
     const buttons = document.querySelectorAll('.tabs button');
