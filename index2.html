@@ -49,7 +49,6 @@
       box-shadow: 0 6px 14px rgba(0,0,0,0.5);
     }
 
-    /* Tabs */
     .tabs {
       display: flex;
       justify-content: center;
@@ -78,16 +77,21 @@
       background: #2a2a2a;
     }
 
-    /* Tab content */
+    /* Tab content - key fix */
     .tab-content {
       opacity: 0;
-      display: none; /* hide inactive tabs */
+      visibility: hidden; /* keep in DOM for adaptive height */
       transition: opacity 0.5s ease;
+      position: absolute; /* inactive tabs don't affect layout */
+      top: 0;
+      left: 0;
+      width: 100%;
     }
 
     .tab-content.active {
       opacity: 1;
-      display: block; /* show active tab */
+      visibility: visible;
+      position: relative; /* active tab occupies normal flow */
     }
 
     .card {
@@ -146,12 +150,12 @@
 </header>
 
 <div class="tabs">
-  <button class="active" onclick="showTab('globe')">🌍 Globe View</button>
-  <button onclick="showTab('ground')">🛰 Ground Tracks</button>
-  <button onclick="showTab('altitude')">📈 Altitude History</button>
-  <button onclick="showTab('category')">🗂 Satellite Category</button>
-  <button onclick="showTab('distribution')">🌌 Orbital Distribution</button>
-  <button onclick="showTab('starlink')">⭐ Starlink Plot</button>
+  <button class="active" onclick="showTab('globe', this)">🌍 Globe View</button>
+  <button onclick="showTab('ground', this)">🛰 Ground Tracks</button>
+  <button onclick="showTab('altitude', this)">📈 Altitude History</button>
+  <button onclick="showTab('category', this)">🗂 Satellite Category</button>
+  <button onclick="showTab('distribution', this)">🌌 Orbital Distribution</button>
+  <button onclick="showTab('starlink', this)">⭐ Starlink Plot</button>
 </div>
 
 <div id="globe" class="tab-content active">
@@ -174,16 +178,15 @@
 </div>
 
 <script>
-  // Tab switching with fade
-  function showTab(tabId) {
+  function showTab(tabId, btn) {
     const contents = document.querySelectorAll('.tab-content');
     const buttons = document.querySelectorAll('.tabs button');
 
     contents.forEach(div => div.classList.remove('active'));
-    buttons.forEach(btn => btn.classList.remove('active'));
+    buttons.forEach(b => b.classList.remove('active'));
 
     document.getElementById(tabId).classList.add('active');
-    event.currentTarget.classList.add('active');
+    btn.classList.add('active');
   }
 
   // Listen for iframe height messages for adaptive sizing
