@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Kuiper Satellites Overview</title>
+  <title>Starlink Satellites Overview</title>
   <style>
     body { margin: 0; background: black; }
+
     #time-log {
       position: absolute;
       font-size: 12px;
@@ -29,29 +30,22 @@
   <script type="module">
     import * as satellite from 'https://esm.sh/satellite.js';
 
-    const EARTH_RADIUS_KM = 6371; 
-    const TIME_STEP = 10 * 1000;   // advance 10s per frame
-    const ORBIT_MINUTES = 90;      // length of orbit track
-
+    const EARTH_RADIUS_KM = 6371; // km
+    const TIME_STEP = 3 * 1000;   // advance 3 sec per frame
     const timeLogger = document.getElementById('time-log');
 
-    // Init globe
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointAltitude('alt')
-      .pointColor(() => 'red')
-      .pointRadius(0.6)
-      .arcColor(() => ['cyan', 'cyan'])
-      .arcAltitude(() => 0.15)
-      .arcStroke(0.5)
-      .backgroundColor('#000011');
+      .particleLat('lat')
+      .particleLng('lng')
+      .particleAltitude('alt')
+      .particlesColor(() => 'palegreen');
 
-    setTimeout(() => world.pointOfView({ altitude: 3 }));
+    // Initial camera position
+    setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
     // Fetch Kuiper constellation TLEs
-    fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
+    fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle')
       .then(r => r.text())
       .then(rawData => {
         const tleData = rawData.replace(/\r/g, '')
@@ -63,54 +57,34 @@
           satrec: satellite.twoline2satrec(...tle),
           name: name.trim().replace(/^0 /, '')
         }))
+        // exclude satellites that can't be propagated
         .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
 
-        function getPosition(satrec, date) {
-          const pv = satellite.propagate(satrec, date);
-          if (!pv.position) return null;
-          const gmst = satellite.gstime(date);
-          const geo = satellite.eciToGeodetic(pv.position, gmst);
-          return {
-            lat: satellite.radiansToDegrees(geo.latitude),
-            lng: satellite.radiansToDegrees(geo.longitude),
-            alt: geo.height / EARTH_RADIUS_KM
-          };
-        }
-
-        // Time ticker
+        // time ticker
         let time = new Date();
         (function frameTicker() {
           requestAnimationFrame(frameTicker);
 
           time = new Date(+time + TIME_STEP);
-          timeLogger.innerText = time.toUTCString();
+          timeLogger.innerText = time.toString();
 
-          // Satellites as points
-          const satMarkers = satData.map(sat => {
-            const pos = getPosition(sat.satrec, time);
-            return pos ? { lat: pos.lat, lng: pos.lng, alt: 0.02, name: sat.name } : null;
-          }).filter(Boolean);
-
-          // Orbit tracks as arcs (polyline segments)
-          const satOrbits = satData.map(sat => {
-            const orbit = [];
-            for (let m = 0; m < ORBIT_MINUTES; m += 2) { // every 2 minutes
-              const future = new Date(+time + m * 60 * 1000);
-              const pos = getPosition(sat.satrec, future);
-              if (pos) orbit.push([pos.lat, pos.lng, 0.002]);
+          // Update satellite positions
+          const gmst = satellite.gstime(time);
+          satData.forEach(d => {
+            const eci = satellite.propagate(d.satrec, time);
+            if (eci?.position) {
+              const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+              d.lat = satellite.radiansToDegrees(gdPos.latitude);
+              d.lng = satellite.radiansToDegrees(gdPos.longitude);
+              d.alt = gdPos.height / EARTH_RADIUS_KM;
+            } else {
+              d.lat = NaN;
+              d.lng = NaN;
+              d.alt = NaN;
             }
-            return orbit.length > 1 ? { line: orbit } : null;
-          }).filter(Boolean);
+          });
 
-          world.pointsData(satMarkers);
-          world.arcsData(satOrbits)
-            .arcStartLat(d => d.line[0][0])
-            .arcStartLng(d => d.line[0][1])
-            .arcEndLat(d => d.line[d.line.length-1][0])
-            .arcEndLng(d => d.line[d.line.length-1][1])
-            .arcDashLength(0.9)
-            .arcDashGap(0.05)
-            .arcDashAnimateTime(4000);
+          world.particlesData([satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt))]);
         })();
       });
   </script>
