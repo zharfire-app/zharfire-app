@@ -7,16 +7,15 @@
     body {
       font-family: Arial, sans-serif;
       margin: 0;
-      background: #121212; /* dark background */
+      background: #121212;
       color: #f0f0f0;
     }
 
-    /* Title panel */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: #2c2c2c; /* gray contrast */
+      background: #2c2c2c;
       padding: 15px 25px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
@@ -27,7 +26,6 @@
       color: #f0f0f0;
     }
 
-    /* Top buttons */
     .top-buttons {
       display: flex;
       gap: 10px;
@@ -42,7 +40,6 @@
       text-decoration: none;
       font-size: 14px;
       font-weight: 600;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
       transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
     }
 
@@ -52,30 +49,63 @@
       box-shadow: 0 6px 14px rgba(0,0,0,0.5);
     }
 
-    /* Main grid */
     main {
       margin: 20px;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-      gap: 20px;
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .tabs button {
+      padding: 12px 20px;
+      background: #1e1e1e;
+      color: #f0f0f0;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .tabs button.active {
+      background: #007acc;
+      color: white;
+    }
+
+    .tabs button:hover {
+      background: #2a2a2a;
+    }
+
+    .tab-content {
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: opacity 0.5s ease, max-height 0.5s ease;
+    }
+
+    .tab-content.active {
+      opacity: 1;
+      max-height: 1000px; /* large enough to fit content */
     }
 
     .card {
-      background: #1e1e1e; /* dark card */
+      background: #1e1e1e;
       border-radius: 12px;
       padding: 10px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.5);
       transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      margin-bottom: 20px;
     }
 
-    /* Card hover effect */
     .card:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(0,0,0,0.7);
-      background: #2a2a2a; /* slightly brighter */
+      background: #2a2a2a;
     }
 
     .card h3 {
@@ -92,18 +122,13 @@
       transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
     }
 
-    /* iframe hover effect */
     .card iframe:hover {
       transform: translateY(-3px);
       box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-      filter: brightness(1.1); /* slightly brighter */
+      filter: brightness(1.1);
     }
 
-    /* Responsive adjustments for mobile */
     @media (max-width: 600px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
       header {
         flex-direction: column;
         align-items: flex-start;
@@ -116,24 +141,56 @@
 </head>
 <body>
 
-  <header>
-    <h1>Satellite Dashboard</h1>
-    <div class="top-buttons">
-      <a href="index2.html">✨ New View</a>
-      <a href="overview.html">📊 Overview</a>
-    </div>
-  </header>
+<header>
+  <h1>Satellite Dashboard</h1>
+  <div class="top-buttons">
+    <a href="index2.html">✨ New View</a>
+    <a href="overview.html">📊 Overview</a>
+  </div>
+</header>
 
-  <main>
-    <div class="grid">
-      <div class="card"><h3>🌍 Globe View</h3><iframe src="globe_tracks.html"></iframe></div>
-      <div class="card"><h3>🛰 Ground Tracks</h3><iframe src="ground_tracks.html"></iframe></div>
-      <div class="card"><h3>📈 Altitude History</h3><iframe src="historical_orbital_parameters.html"></iframe></div>
-      <div class="card"><h3>🗂 Satellite Category</h3><iframe src="satellite_altitude_by_category.html"></iframe></div>
-      <div class="card"><h3>🌌 Orbital Distribution</h3><iframe src="orbital_distributions_titles_higher.html"></iframe></div>
-      <div class="card"><h3>⭐ Interactive Starlink Plot</h3><iframe src="starlink_interactive_satellite_plot.html"></iframe></div>
-    </div>
-  </main>
+<main>
+  <div class="tabs">
+    <button class="active" onclick="showTab('globe')">🌍 Globe View</button>
+    <button onclick="showTab('ground')">🛰 Ground Tracks</button>
+    <button onclick="showTab('altitude')">📈 Altitude History</button>
+    <button onclick="showTab('category')">🗂 Satellite Category</button>
+    <button onclick="showTab('distribution')">🌌 Orbital Distribution</button>
+    <button onclick="showTab('starlink')">⭐ Starlink Plot</button>
+  </div>
+
+  <div id="globe" class="tab-content active">
+    <div class="card"><h3>🌍 Globe View</h3><iframe src="globe_tracks.html"></iframe></div>
+  </div>
+  <div id="ground" class="tab-content">
+    <div class="card"><h3>🛰 Ground Tracks</h3><iframe src="ground_tracks.html"></iframe></div>
+  </div>
+  <div id="altitude" class="tab-content">
+    <div class="card"><h3>📈 Altitude History</h3><iframe src="historical_orbital_parameters.html"></iframe></div>
+  </div>
+  <div id="category" class="tab-content">
+    <div class="card"><h3>🗂 Satellite Category</h3><iframe src="satellite_altitude_by_category.html"></iframe></div>
+  </div>
+  <div id="distribution" class="tab-content">
+    <div class="card"><h3>🌌 Orbital Distribution</h3><iframe src="orbital_distributions_titles_higher.html"></iframe></div>
+  </div>
+  <div id="starlink" class="tab-content">
+    <div class="card"><h3>⭐ Interactive Starlink Plot</h3><iframe src="starlink_interactive_satellite_plot.html"></iframe></div>
+  </div>
+</main>
+
+<script>
+function showTab(tabId) {
+  const contents = document.querySelectorAll('.tab-content');
+  const buttons = document.querySelectorAll('.tabs button');
+
+  contents.forEach(div => div.classList.remove('active'));
+  buttons.forEach(btn => btn.classList.remove('active'));
+
+  document.getElementById(tabId).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+</script>
 
 </body>
 </html>
