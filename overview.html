@@ -31,6 +31,137 @@
     import * as satellite from 'https://esm.sh/satellite.js';
 
     const EARTH_RADIUS_KM = 6371; // km
+    const TIME_STEP = 5 * 1000;   // advance 5 sec per frame
+    const NUM_POINTS = 90;        // number of orbit path segments
+
+    const timeLogger = document.getElementById('time-log');
+
+    // Init globe
+    const world = Globe()(document.getElementById('chart'))
+      .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointAltitude('alt')
+      .pointColor(() => 'red')
+      .pointRadius(0.8)
+      .arcColor(() => ['cyan', 'cyan'])
+      .arcAltitude(alt => alt)   // make arcs slightly raised
+      .arcStroke(0.4);
+
+    setTimeout(() => world.pointOfView({ altitude: 3.5 }));
+
+    // Fetch Kuiper constellation TLEs
+    fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
+      .then(r => r.text())
+      .then(rawData => {
+        const tleData = rawData.replace(/\r/g, '')
+          .split(/\n(?=[^12])/)
+          .filter(d => d)
+          .map(tle => tle.split('\n'));
+
+        const satData = tleData.map(([name, ...tle]) => ({
+          satrec: satellite.twoline2satrec(...tle),
+          name: name.trim().replace(/^0 /, '')
+        }))
+        .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
+
+        // Prepare structures
+        const satMarkers = satData.map(d => ({ lat: 0, lng: 0, alt: 0.001, name: d.name }));
+        const satOrbits = [];
+
+        // Function to compute satellite position
+        function getPosition(satrec, date) {
+          const pv = satellite.propagate(satrec, date);
+          if (!pv.position) return null;
+          const gmst = satellite.gstime(date);
+          const geo = satellite.eciToGeodetic(pv.position, gmst);
+          return {
+            lat: satellite.degreesLat(geo.latitude),
+            lng: satellite.degreesLong(geo.longitude),
+            alt: geo.height / EARTH_RADIUS_KM
+          };
+        }
+
+        // Time ticker
+        let time = new Date();
+        (function frameTicker() {
+          requestAnimationFrame(frameTicker);
+
+          time = new Date(+time + TIME_STEP);
+          timeLogger.innerText = time.toUTCString();
+
+          // Update satellite positions
+          satData.forEach((sat, i) => {
+            const pos = getPosition(sat.satrec, time);
+            if (pos) {
+              satMarkers[i].lat = pos.lat;
+              satMarkers[i].lng = pos.lng;
+              satMarkers[i].alt = 0.01; // small altitude offset so it's visible
+            }
+          });
+
+          // Update orbits
+          satOrbits.length = 0; // reset
+          satData.forEach((sat, i) => {
+            const orbitPoints = [];
+            for (let j = 0; j < NUM_POINTS; j++) {
+              const future = new Date(+time + j * 60 * 1000); // every 1 min
+              const pos = getPosition(sat.satrec, future);
+              if (pos) {
+                orbitPoints.push([pos.lat, pos.lng, 0.002]); // slight raise
+              }
+            }
+            if (orbitPoints.length > 1) {
+              satOrbits.push({
+                startLat: orbitPoints[0][0],
+                startLng: orbitPoints[0][1],
+                endLat: orbitPoints[orbitPoints.length-1][0],
+                endLng: orbitPoints[orbitPoints.length-1][1],
+                arcAlt: 0.2
+              });
+            }
+          });
+
+          world.pointsData(satMarkers);
+          world.arcsData(satOrbits);
+        })();
+      });
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kuiper Satellites Overview</title>
+  <style>
+    body { margin: 0; background: black; }
+
+    #time-log {
+      position: absolute;
+      font-size: 12px;
+      font-family: sans-serif;
+      padding: 5px;
+      border-radius: 3px;
+      background-color: rgba(200, 200, 200, 0.1);
+      color: lavender;
+      bottom: 10px;
+      right: 10px;
+    }
+  </style>
+
+  <!-- Globe.gl -->
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
+</head>
+
+<body>
+  <div id="chart"></div>
+  <div id="time-log"></div>
+
+  <script type="module">
+    import * as satellite from 'https://esm.sh/satellite.js';
+
+    const EARTH_RADIUS_KM = 6371; // km
     const TIME_STEP = 3 * 1000;   // advance 3 sec per frame
     const timeLogger = document.getElementById('time-log');
 
@@ -90,3 +221,4 @@
   </script>
 </body>
 </html>
+
