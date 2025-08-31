@@ -71,10 +71,11 @@
       transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
 
+    /* Card hover effect */
     .card:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(0,0,0,0.7);
-      background: #2a2a2a; /* slightly brighter on hover */
+      background: #2a2a2a; /* slightly brighter */
     }
 
     .card h3 {
@@ -88,6 +89,14 @@
       border: none;
       border-radius: 8px;
       background: #000;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    }
+
+    /* iframe hover effect */
+    .card iframe:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+      filter: brightness(1.1); /* slightly brighter */
     }
 
     /* Responsive adjustments for mobile */
@@ -111,7 +120,7 @@
     <h1>Satellite Dashboard</h1>
     <div class="top-buttons">
       <a href="index2.html">✨ New View</a>
-      <a href="satellite_dashboard_synced_dark.html">📊 Overview Map</a>
+      <a href="overview.html">📊 Overview</a>
     </div>
   </header>
 
