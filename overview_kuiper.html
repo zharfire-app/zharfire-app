@@ -21,16 +21,14 @@
   <script type="module">
     import * as satellite from 'https://esm.sh/satellite.js';
 
-    // ---- constants
     const EARTH_RADIUS_KM = 6371;
-    const STEP_MS = 1 * 1000;                 // sim step per frame (1 s)
-    const ORBIT_SPAN_MIN = 100;           // total minutes shown per orbit path
-    const ORBIT_STEP_MIN = 1;             // spacing between path points
-    const PATH_REFRESH_EVERY_FRAMES = 30; // recompute paths every N frames
+    const STEP_MS = 5000; 
+    const ORBIT_SPAN_MIN = 100;
+    const ORBIT_STEP_MIN = 1;
+    const PATH_REFRESH_EVERY_FRAMES = 30;
 
     const timeLog = document.getElementById('time-log');
 
-    // ---- globe setup
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
       .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
@@ -38,37 +36,32 @@
       .atmosphereColor('#7aa9ff')
       .atmosphereAltitude(0.2)
       .backgroundColor('#000000')
-      // satellites (points)
       .pointLat('lat')
       .pointLng('lng')
-      .pointAltitude('alt')                 // realistic altitude (fraction of Earth radius)
+      .pointAltitude('alt')
       .pointColor(() => 'crimson')
-      .pointRadius(1.2)
+      .pointRadius(2.0)  <!-- made bigger so you see them -->
       .pointResolution(16)
-      // orbit paths (polylines)
       .pathsData([])
-      .pathPoints('coords')                 // each path: { coords: [[lat,lng,altFrac], ...] }
+      .pathPoints('coords')
       .pathPointLat(p => p[0])
       .pathPointLng(p => p[1])
       .pathPointAltitude(p => p[2])
       .pathColor(() => 'cyan')
       .pathStroke(0.6)
-      .pathsTransitionDuration(0);          // instant updates (less smear)
+      .pathsTransitionDuration(0);
 
-    // nicer camera feel
     world.controls().autoRotate = true;
     world.controls().autoRotateSpeed = 0.5;
     setTimeout(() => world.pointOfView({ altitude: 3.2 }), 100);
 
-    // ---- helpers
     function getPosLLA(satrec, date) {
       const pv = satellite.propagate(satrec, date);
       if (!pv?.position) return null;
       const gmst = satellite.gstime(date);
       const gd = satellite.eciToGeodetic(pv.position, gmst);
-      const lat = satellite.degreesLat(gd.latitude);
-      let lng = satellite.degreesLong(gd.longitude);
-      // normalize to [-180, 180]
+      const lat = satellite.radiansToDegrees(gd.latitude);
+      let lng = satellite.radiansToDegrees(gd.longitude);
       if (lng > 180) lng -= 360;
       if (lng < -180) lng += 360;
       const altFrac = (gd.height || 0) / EARTH_RADIUS_KM;
@@ -76,15 +69,13 @@
     }
 
     function buildOrbitSegments(satrec, centerTime) {
-      // build points from -span/2 .. +span/2 around center
       const half = ORBIT_SPAN_MIN / 2;
       const points = [];
       for (let m = -half; m <= half; m += ORBIT_STEP_MIN) {
         const t = new Date(centerTime.getTime() + m * 60 * 1000);
         const p = getPosLLA(satrec, t);
-        if (p) points.push([p.lat, p.lng, Math.max(p.altFrac, 0.01)]); // keep thin but visible
+        if (p) points.push([p.lat, p.lng, Math.max(p.altFrac, 0.01)]);
       }
-      // split at dateline to avoid long wrap lines
       const segments = [];
       let seg = [];
       for (let i = 0; i < points.length; i++) {
@@ -92,7 +83,7 @@
         if (seg.length) {
           const prev = seg[seg.length - 1];
           const dLng = Math.abs(pt[1] - prev[1]);
-          if (dLng > 180) {                // big jump → new segment
+          if (dLng > 180) {
             segments.push({ coords: seg });
             seg = [];
           }
@@ -103,7 +94,6 @@
       return segments;
     }
 
-    // ---- main
     const TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle';
 
     fetch(TLE_URL).then(r => r.text()).then(raw => {
@@ -113,45 +103,37 @@
         name: name.trim().replace(/^0 /, ''),
         satrec: satellite.twoline2satrec(l1.trim(), l2.trim())
       }))
-      // keep only propagable ones
       .filter(s => !!satellite.propagate(s.satrec, new Date())?.position);
 
-      // state
       let simTime = new Date();
-      const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 })); // will fill each frame
+      const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 }));
       world.pointsData(markers);
 
       let frame = 0;
-      let currentPaths = [];
 
       function tick() {
         requestAnimationFrame(tick);
         simTime = new Date(simTime.getTime() + STEP_MS);
         timeLog.textContent = simTime.toUTCString();
 
-        // move satellites
         sats.forEach((s, i) => {
           const p = getPosLLA(s.satrec, simTime);
           if (p) {
             markers[i].lat = p.lat;
             markers[i].lng = p.lng;
-            // show real altitude but clamp to a sensible visual minimum so dots aren't buried
             markers[i].alt = Math.max(p.altFrac, 0.02);
           }
         });
         world.pointsData(markers);
 
-        // refresh orbit paths every few frames (perf)
         frame++;
         if (frame % PATH_REFRESH_EVERY_FRAMES === 0) {
           const paths = [];
           for (const s of sats) {
             const segs = buildOrbitSegments(s.satrec, simTime);
-            // concatenate all segments
             paths.push(...segs);
           }
-          currentPaths = paths;
-          world.pathsData(currentPaths);
+          world.pathsData(paths);
         }
       }
       tick();
