@@ -34,7 +34,7 @@
       .pointLat('lat')
       .pointLng('lng')
       .pointAltitude('alt')
-      .pointColor(() => 'red')
+      .pointColor(() => 'yellow')
       .pointRadius(2.5)
       .pointResolution(16);
 
@@ -57,29 +57,31 @@
     const GP_JSON_URL = 'kuiper.json';  // local file
 
     fetch(GP_JSON_URL).then(r => r.json()).then(data => {
-      // Build satrecs manually from GP elements
+      const deg2rad = Math.PI / 180;
+
+      // Build satellite records
       const sats = data.map(obj => {
-        const satrec = satellite.sgp4init(
-          satellite.wgs84(),
-          // opsmode
-          'i',
-          obj.NORAD_CAT_ID,                 // satnum
-          satellite.jday(new Date(obj.EPOCH).getUTCFullYear(),
-                         new Date(obj.EPOCH).getUTCMonth() + 1,
-                         new Date(obj.EPOCH).getUTCDate(),
-                         new Date(obj.EPOCH).getUTCHours(),
-                         new Date(obj.EPOCH).getUTCMinutes(),
-                         new Date(obj.EPOCH).getUTCSeconds() + new Date(obj.EPOCH).getUTCMilliseconds()/1000),
-          obj.BSTAR,                        // bstar
-          obj.MEAN_MOTION_DOT,              // ndot
-          obj.MEAN_MOTION_DDOT,             // nddot
-          obj.ECCENTRICITY,                 // ecco
-          obj.ARG_OF_PERICENTER,            // argpo (deg)
-          obj.INCLINATION,                  // inclo (deg)
-          obj.MEAN_ANOMALY,                 // mo (deg)
-          obj.MEAN_MOTION,                  // no (rev/day)
-          obj.RA_OF_ASC_NODE                // nodeo (deg)
-        );
+        const satrec = satellite.sgp4init({
+          opsmode: 'i',
+          satnum: obj.NORAD_CAT_ID,
+          epoch: satellite.jday(
+            new Date(obj.EPOCH).getUTCFullYear(),
+            new Date(obj.EPOCH).getUTCMonth() + 1,
+            new Date(obj.EPOCH).getUTCDate(),
+            new Date(obj.EPOCH).getUTCHours(),
+            new Date(obj.EPOCH).getUTCMinutes(),
+            new Date(obj.EPOCH).getUTCSeconds() + new Date(obj.EPOCH).getUTCMilliseconds()/1000
+          ),
+          bstar: obj.BSTAR,
+          ndot: obj.MEAN_MOTION_DOT,
+          nddot: obj.MEAN_MOTION_DDOT,
+          ecco: obj.ECCENTRICITY,
+          argpo: obj.ARG_OF_PERICENTER * deg2rad,
+          inclo: obj.INCLINATION * deg2rad,
+          mo: obj.MEAN_ANOMALY * deg2rad,
+          no: obj.MEAN_MOTION * 2 * Math.PI / 1440, // rev/day → rad/min
+          nodeo: obj.RA_OF_ASC_NODE * deg2rad
+        });
         return { name: obj.OBJECT_NAME, satrec };
       });
 
@@ -100,8 +102,10 @@
             markers[i].alt = Math.max(p.altFrac, 0.02);
           }
         });
+
         world.pointsData(markers);
       }
+
       tick();
     });
   </script>
