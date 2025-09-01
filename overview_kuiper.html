@@ -1,68 +1,109 @@
-<script type="module">
-  import * as satellite from 'https://esm.sh/satellite.js';
-
-  const EARTH_RADIUS_KM = 6371;
-  const STEP_MS = 5000;
-
-  const world = Globe()(document.getElementById('chart'))
-    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
-    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-    .showAtmosphere(true)
-    .atmosphereColor('#7aa9ff')
-    .atmosphereAltitude(0.25)
-    .backgroundColor('#000000')
-    .pointLat('lat')
-    .pointLng('lng')
-    .pointAltitude('alt')
-    .pointColor(() => 'red')
-    .pointRadius(2.2)
-    .pointResolution(16);
-
-  world.controls().autoRotate = true;
-  world.controls().autoRotateSpeed = 0.3;
-  setTimeout(() => world.pointOfView({ altitude: 3.5 }), 1000);
-
-  function getPosLLA(satrec, date) {
-    const pv = satellite.propagate(satrec, date);
-    if (!pv?.position) return null;
-    const gmst = satellite.gstime(date);
-    const gd = satellite.eciToGeodetic(pv.position, gmst);
-    return {
-      lat: satellite.degreesLat(gd.latitude),
-      lng: satellite.degreesLong(gd.longitude),
-      altFrac: (gd.height || 0) / EARTH_RADIUS_KM
-    };
-  }
-
-  // JSON GP endpoint
-  const GP_JSON_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=json';
-
-  fetch(GP_JSON_URL).then(r => r.json()).then(data => {
-    // Convert GP JSON → satrec
-    const sats = data.map(obj => ({
-      name: obj.OBJECT_NAME,
-      satrec: satellite.gpConvert(obj)  // <-- this is key!
-    }));
-
-    let simTime = new Date();
-    const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 }));
-    world.pointsData(markers);
-
-    function tick() {
-      requestAnimationFrame(tick);
-      simTime = new Date(simTime.getTime() + STEP_MS);
-      document.getElementById('time-log').textContent = simTime.toUTCString();
-
-      sats.forEach((s, i) => {
-        const p = getPosLLA(s.satrec, simTime);
-        if (p) {
-          markers[i].lat = p.lat;
-          markers[i].lng = p.lng;
-          markers[i].alt = Math.max(p.altFrac, 0.02);
-        }
-      });
-      world.pointsData(markers);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kuiper Satellites – JSON GP</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; }
+    #chart { width: 100%; height: 100%; }
+    #time-log {
+      position: fixed; right: 10px; bottom: 10px;
+      font: 12px/1.2 system-ui, sans-serif; color: #cfd8ff;
+      background: rgba(255,255,255,0.06); padding: 6px 8px; border-radius: 6px;
     }
-    tick();
-  });
-</script>
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
+</head>
+<body>
+  <div id="chart"></div>
+  <div id="time-log"></div>
+
+  <script type="module">
+    import * as satellite from 'https://esm.sh/satellite.js';
+
+    const EARTH_RADIUS_KM = 6371;
+    const STEP_MS = 5000;
+
+    const world = Globe()(document.getElementById('chart'))
+      .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+      .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+      .showAtmosphere(true)
+      .atmosphereColor('#7aa9ff')
+      .atmosphereAltitude(0.25)
+      .backgroundColor('#000000')
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointAltitude('alt')
+      .pointColor(() => 'red')
+      .pointRadius(2.5)
+      .pointResolution(16);
+
+    world.controls().autoRotate = true;
+    world.controls().autoRotateSpeed = 0.3;
+    setTimeout(() => world.pointOfView({ altitude: 3.5 }), 1000);
+
+    function getPosLLA(satrec, date) {
+      const pv = satellite.propagate(satrec, date);
+      if (!pv?.position) return null;
+      const gmst = satellite.gstime(date);
+      const gd = satellite.eciToGeodetic(pv.position, gmst);
+      return {
+        lat: satellite.degreesLat(gd.latitude),
+        lng: satellite.degreesLong(gd.longitude),
+        altFrac: (gd.height || 0) / EARTH_RADIUS_KM
+      };
+    }
+
+    const GP_JSON_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=json';
+
+    fetch(GP_JSON_URL).then(r => r.json()).then(data => {
+      // Build satrecs manually from GP elements
+      const sats = data.map(obj => {
+        const satrec = satellite.sgp4init(
+          satellite.wgs84(),
+          // opsmode
+          'i',
+          obj.NORAD_CAT_ID,                 // satnum
+          satellite.jday(new Date(obj.EPOCH).getUTCFullYear(),
+                         new Date(obj.EPOCH).getUTCMonth() + 1,
+                         new Date(obj.EPOCH).getUTCDate(),
+                         new Date(obj.EPOCH).getUTCHours(),
+                         new Date(obj.EPOCH).getUTCMinutes(),
+                         new Date(obj.EPOCH).getUTCSeconds() + new Date(obj.EPOCH).getUTCMilliseconds()/1000),
+          obj.BSTAR,                        // bstar
+          obj.MEAN_MOTION_DOT,              // ndot
+          obj.MEAN_MOTION_DDOT,             // nddot
+          obj.ECCENTRICITY,                 // ecco
+          obj.ARG_OF_PERICENTER,            // argpo (deg)
+          obj.INCLINATION,                  // inclo (deg)
+          obj.MEAN_ANOMALY,                 // mo (deg)
+          obj.MEAN_MOTION,                  // no (rev/day)
+          obj.RA_OF_ASC_NODE                // nodeo (deg)
+        );
+        return { name: obj.OBJECT_NAME, satrec };
+      });
+
+      let simTime = new Date();
+      const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 }));
+      world.pointsData(markers);
+
+      function tick() {
+        requestAnimationFrame(tick);
+        simTime = new Date(simTime.getTime() + STEP_MS);
+        document.getElementById('time-log').textContent = simTime.toUTCString();
+
+        sats.forEach((s, i) => {
+          const p = getPosLLA(s.satrec, simTime);
+          if (p) {
+            markers[i].lat = p.lat;
+            markers[i].lng = p.lng;
+            markers[i].alt = Math.max(p.altFrac, 0.02);
+          }
+        });
+        world.pointsData(markers);
+      }
+      tick();
+    });
+  </script>
+</body>
+</html>
