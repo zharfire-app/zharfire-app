@@ -54,7 +54,7 @@
       };
     }
 
-    const GP_JSON_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=json';
+    const GP_JSON_URL = 'kuiper.json';  // local file
 
     fetch(GP_JSON_URL).then(r => r.json()).then(data => {
       // Build satrecs manually from GP elements
