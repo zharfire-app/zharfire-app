@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Kuiper Satellites – JSON GP</title>
+  <title>Kuiper Satellites – TLE</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; }
     #chart { width: 100%; height: 100%; }
@@ -54,60 +54,46 @@
       };
     }
 
-    const GP_JSON_URL = 'kuiper.json';  // local file
+    // Example: fetch Kuiper satellites from CelesTrak (replace URL if needed)
+    const TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=TLE';
 
-    fetch(GP_JSON_URL).then(r => r.json()).then(data => {
-      const deg2rad = Math.PI / 180;
+    fetch(TLE_URL)
+      .then(r => r.text())
+      .then(text => {
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        const sats = [];
 
-      // Build satellite records
-      const sats = data.map(obj => {
-        const satrec = satellite.sgp4init({
-          opsmode: 'i',
-          satnum: obj.NORAD_CAT_ID,
-          epoch: satellite.jday(
-            new Date(obj.EPOCH).getUTCFullYear(),
-            new Date(obj.EPOCH).getUTCMonth() + 1,
-            new Date(obj.EPOCH).getUTCDate(),
-            new Date(obj.EPOCH).getUTCHours(),
-            new Date(obj.EPOCH).getUTCMinutes(),
-            new Date(obj.EPOCH).getUTCSeconds() + new Date(obj.EPOCH).getUTCMilliseconds()/1000
-          ),
-          bstar: obj.BSTAR,
-          ndot: obj.MEAN_MOTION_DOT,
-          nddot: obj.MEAN_MOTION_DDOT,
-          ecco: obj.ECCENTRICITY,
-          argpo: obj.ARG_OF_PERICENTER * deg2rad,
-          inclo: obj.INCLINATION * deg2rad,
-          mo: obj.MEAN_ANOMALY * deg2rad,
-          no: obj.MEAN_MOTION * 2 * Math.PI / 1440, // rev/day → rad/min
-          nodeo: obj.RA_OF_ASC_NODE * deg2rad
-        });
-        return { name: obj.OBJECT_NAME, satrec };
-      });
+        // Each satellite is 3 lines: name, line1, line2
+        for (let i = 0; i < lines.length; i += 3) {
+          sats.push({
+            name: lines[i].trim(),
+            satrec: satellite.twoline2satrec(lines[i+1], lines[i+2])
+          });
+        }
 
-      let simTime = new Date();
-      const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 }));
-      world.pointsData(markers);
-
-      function tick() {
-        requestAnimationFrame(tick);
-        simTime = new Date(simTime.getTime() + STEP_MS);
-        document.getElementById('time-log').textContent = simTime.toUTCString();
-
-        sats.forEach((s, i) => {
-          const p = getPosLLA(s.satrec, simTime);
-          if (p) {
-            markers[i].lat = p.lat;
-            markers[i].lng = p.lng;
-            markers[i].alt = Math.max(p.altFrac, 0.02);
-          }
-        });
-
+        let simTime = new Date();
+        const markers = sats.map(_ => ({ lat: 0, lng: 0, alt: 0 }));
         world.pointsData(markers);
-      }
 
-      tick();
-    });
+        function tick() {
+          requestAnimationFrame(tick);
+          simTime = new Date(simTime.getTime() + STEP_MS);
+          document.getElementById('time-log').textContent = simTime.toUTCString();
+
+          sats.forEach((s, i) => {
+            const p = getPosLLA(s.satrec, simTime);
+            if (p) {
+              markers[i].lat = p.lat;
+              markers[i].lng = p.lng;
+              markers[i].alt = Math.max(p.altFrac, 0.02);
+            }
+          });
+
+          world.pointsData(markers);
+        }
+
+        tick();
+      });
   </script>
 </body>
 </html>
