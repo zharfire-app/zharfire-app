@@ -2,9 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Kuiper Satellites Overview</title>
+  <title>Satellites Constellation Overview</title>
   <style>
     body { margin: 0; background: black; }
+
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-family: sans-serif;
+      font-size: 14px;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 6px 10px;
+      border-radius: 5px;
+    }
+
     #time-log {
       position: absolute;
       font-size: 12px;
@@ -23,29 +36,44 @@
 </head>
 <body>
   <div id="chart"></div>
+  <div id="controls">
+    <label>
+      <input type="checkbox" id="toggleKuiper" />
+      Highlight Kuiper Satellites
+    </label>
+  </div>
   <div id="time-log"></div>
 
   <script type="module">
     import * as satellite from 'https://esm.sh/satellite.js';
 
     const EARTH_RADIUS_KM = 6371; // km
-    const TIME_STEP = 1 * 1000;   // 1 sec/frame
+    const TIME_STEP = 1 * 1000;   // advance 1 sec per frame
     const timeLogger = document.getElementById('time-log');
+    const toggleKuiper = document.getElementById('toggleKuiper');
+
+    let highlightKuiper = false;
 
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointAltitude('alt')
-      .pointColor(() => 'palegreen')
-      .pointRadius(0.6)
-      .pathPoints('coords')
-      .pathColor(() => 'rgba(173,216,230,0.3)')
-      .pathStroke(0.6);
+      .particleLat('lat')
+      .particleLng('lng')
+      .particleAltitude('alt')
+      .particlesColor(d => highlightKuiper ? 'yellow' : 'palegreen')
+      .particleRadius(highlightKuiper ? 1.5 : 0.6);
 
+    // Initial camera position
     setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
-    // Fetch TLEs
+    // Checkbox event
+    toggleKuiper.addEventListener('change', () => {
+      highlightKuiper = toggleKuiper.checked;
+      world
+        .particlesColor(() => highlightKuiper ? 'yellow' : 'palegreen')
+        .particleRadius(highlightKuiper ? 1.5 : 0.6);
+    });
+
+    // Fetch Kuiper constellation TLEs
     fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
       .then(r => r.text())
       .then(rawData => {
@@ -58,45 +86,26 @@
           satrec: satellite.twoline2satrec(...tle),
           name: name.trim().replace(/^0 /, '')
         }))
+        // exclude satellites that can't be propagated
         .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
 
-        // ---- 1. GROUP SATS BY INCLINATION ----
-        const planes = {};
-        satData.forEach(d => {
-          const incl = d.satrec.inclo * (180 / Math.PI); // radians → deg
-          const key = Math.round(incl); // group by ~1° buckets
-          if (!planes[key]) planes[key] = [];
-          planes[key].push(d);
-        });
-
-        // ---- 2. BUILD GREAT CIRCLES FOR EACH PLANE ----
-        const planePaths = [];
-        Object.entries(planes).forEach(([incl]) => {
-          const coords = [];
-          for (let lon = -180; lon <= 180; lon += 5) {
-            coords.push([+incl, lon, 1.0]);   // northern arc
-            coords.push([-incl, lon, 1.0]);  // mirrored southern arc
-          }
-          planePaths.push({ coords });
-        });
-
-        world.pathsData(planePaths);
-
-        // ---- 3. TIME TICKER FOR SATS ----
+        // time ticker
         let time = new Date();
         (function frameTicker() {
           requestAnimationFrame(frameTicker);
-          time = new Date(+time + TIME_STEP);
-          timeLogger.innerText = time.toUTCString();
 
+          time = new Date(+time + TIME_STEP);
+          timeLogger.innerText = time.toString();
+
+          // Update satellite positions
           const gmst = satellite.gstime(time);
           satData.forEach(d => {
             const eci = satellite.propagate(d.satrec, time);
             if (eci?.position) {
-              const gd = satellite.eciToGeodetic(eci.position, gmst);
-              d.lat = satellite.radiansToDegrees(gd.latitude);
-              d.lng = satellite.radiansToDegrees(gd.longitude);
-              d.alt = gd.height / EARTH_RADIUS_KM;
+              const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+              d.lat = satellite.radiansToDegrees(gdPos.latitude);
+              d.lng = satellite.radiansToDegrees(gdPos.longitude);
+              d.alt = gdPos.height / EARTH_RADIUS_KM;
             } else {
               d.lat = NaN;
               d.lng = NaN;
@@ -104,9 +113,9 @@
             }
           });
 
-          world.pointsData(
+          world.particlesData([
             satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt))
-          );
+          ]);
         })();
       });
   </script>
