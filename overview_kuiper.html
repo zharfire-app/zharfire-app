@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Satellites Constellation Overview</title>
+  <title>Kuiper Satellites Overview</title>
   <style>
     body { margin: 0; background: black; }
 
@@ -47,8 +47,8 @@
   <script type="module">
     import * as satellite from 'https://esm.sh/satellite.js';
 
-    const EARTH_RADIUS_KM = 6371; // km
-    const TIME_STEP = 1 * 1000;   // advance 1 sec per frame
+    const EARTH_RADIUS_KM = 6371;
+    const TIME_STEP = 1000;
     const timeLogger = document.getElementById('time-log');
     const toggleKuiper = document.getElementById('toggleKuiper');
 
@@ -56,24 +56,21 @@
 
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointAltitude('alt')
-      .pointColor(() => highlightKuiper ? 'yellow' : 'palegreen')
-      .pointRadius(() => highlightKuiper ? 0.8 : 0.3);
+      .particleLat('lat')
+      .particleLng('lng')
+      .particleAltitude('alt')
+      .particlesColor(() => highlightKuiper ? 'yellow' : 'palegreen')
+      .particlesSize(2.5)   // make particles bigger (default is ~1)
+      .particlesResolution(8); // smoother round particles
 
-    // Initial camera position
     setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
-    // Checkbox event
     toggleKuiper.addEventListener('change', () => {
       highlightKuiper = toggleKuiper.checked;
-      world
-        .pointColor(() => highlightKuiper ? 'yellow' : 'palegreen')
-        .pointRadius(() => highlightKuiper ? 0.8 : 0.3);
+      world.particlesColor(() => highlightKuiper ? 'yellow' : 'palegreen');
+      world.particlesSize(highlightKuiper ? 4 : 2.5);
     });
 
-    // Fetch Kuiper constellation TLEs
     fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
       .then(r => r.text())
       .then(rawData => {
@@ -86,18 +83,14 @@
           satrec: satellite.twoline2satrec(...tle),
           name: name.trim().replace(/^0 /, '')
         }))
-        // exclude satellites that can't be propagated
         .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
 
-        // time ticker
         let time = new Date();
         (function frameTicker() {
           requestAnimationFrame(frameTicker);
-
           time = new Date(+time + TIME_STEP);
-          timeLogger.innerText = time.toString();
+          timeLogger.innerText = time.toUTCString();
 
-          // Update satellite positions
           const gmst = satellite.gstime(time);
           satData.forEach(d => {
             const eci = satellite.propagate(d.satrec, time);
@@ -107,15 +100,13 @@
               d.lng = satellite.radiansToDegrees(gdPos.longitude);
               d.alt = gdPos.height / EARTH_RADIUS_KM;
             } else {
-              d.lat = NaN;
-              d.lng = NaN;
-              d.alt = NaN;
+              d.lat = NaN; d.lng = NaN; d.alt = NaN;
             }
           });
 
-          world.pointsData(
+          world.particlesData([
             satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt))
-          );
+          ]);
         })();
       });
   </script>
