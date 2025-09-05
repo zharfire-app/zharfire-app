@@ -1,109 +1,60 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Kuiper Satellites Overview</title>
-  <style>
-    body { margin: 0; background: black; }
-    #time-log {
-      position: absolute;
-      font-size: 12px;
-      font-family: sans-serif;
-      padding: 5px;
-      border-radius: 3px;
-      background-color: rgba(200, 200, 200, 0.1);
-      color: lavender;
-      bottom: 10px;
-      right: 10px;
-    }
-    #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(20,20,20,0.6);
-      color: white;
-      padding: 6px;
-      border-radius: 5px;
-      font-family: sans-serif;
-    }
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
-</head>
-<body>
-  <div id="chart"></div>
-  <div id="time-log"></div>
-  <div id="controls">
-    <label>
-      <input type="checkbox" id="highlightKuiper">
-      Highlight Kuiper
-    </label>
-  </div>
+<script type="module">
+  import * as satellite from 'https://esm.sh/satellite.js';
 
-  <script type="module">
-    import * as satellite from 'https://esm.sh/satellite.js';
+  const EARTH_RADIUS_KM = 6371;
+  const TIME_STEP = 1000;
+  const timeLogger = document.getElementById('time-log');
 
-    const EARTH_RADIUS_KM = 6371;
-    const TIME_STEP = 1000; // 1 sec per frame
-    const timeLogger = document.getElementById('time-log');
-    const highlightToggle = document.getElementById('highlightKuiper');
+  const world = Globe()(document.getElementById('chart'))
+    .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
+    .pointLat('lat')
+    .pointLng('lng')
+    .pointAltitude('alt')
+    .pointColor(d => d.highlight ? 'yellow' : 'palegreen')
+    .pointRadius(d => d.highlight ? 0.6 : 0.25);
 
-    // Globe init
-    const world = Globe()(document.getElementById('chart'))
-      .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointAltitude('alt')
-      .pointColor(d => d.highlight ? 'yellow' : 'palegreen')
-      .pointRadius(d => d.highlight ? 0.5 : 0.2);
+  setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
-    setTimeout(() => world.pointOfView({ altitude: 3.5 }));
+  fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
+    .then(r => r.text())
+    .then(rawData => {
+      const tleData = rawData.replace(/\r/g, '')
+        .split(/\n(?=[^12])/)
+        .filter(d => d)
+        .map(tle => tle.split('\n'));
 
-    // Fetch Kuiper TLEs
-    fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
-      .then(r => r.text())
-      .then(rawData => {
-        const tleData = rawData.replace(/\r/g, '')
-          .split(/\n(?=[^12])/)
-          .filter(d => d)
-          .map(tle => tle.split('\n'));
+      const satData = tleData.map(([name, ...tle]) => ({
+        satrec: satellite.twoline2satrec(...tle),
+        name: name.trim().replace(/^0 /, ''),
+        lat: 0, lng: 0, alt: 0,
+        highlight: false
+      }))
+      .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
 
-        const satData = tleData.map(([name, ...tle]) => ({
-          satrec: satellite.twoline2satrec(...tle),
-          name: name.trim().replace(/^0 /, ''),
-          lat: 0, lng: 0, alt: 0,
-          highlight: false
-        }))
-        .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
+      world.pointsData(satData);
 
-        // Pass reference once
-        world.pointsData(satData);
+      let time = new Date();
+      (function frameTicker() {
+        requestAnimationFrame(frameTicker);
 
-        // highlight toggle
-        highlightToggle.addEventListener('change', () => {
-          satData.forEach(d => d.highlight = highlightToggle.checked);
-          world.pointsData(satData); // refresh styles
+        time = new Date(+time + TIME_STEP);
+        timeLogger.innerText = time.toString();
+
+        const gmst = satellite.gstime(time);
+        satData.forEach(d => {
+          const eci = satellite.propagate(d.satrec, time);
+          if (eci?.position) {
+            const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+            d.lat = satellite.radiansToDegrees(gdPos.latitude);
+            d.lng = satellite.radiansToDegrees(gdPos.longitude);
+
+            // scale up visually so it doesn't hug Earth
+            d.alt = (gdPos.height / EARTH_RADIUS_KM) * 2.0;
+          }
         });
 
-        // Animate
-        let time = new Date();
-        (function frameTicker() {
-          requestAnimationFrame(frameTicker);
-
-          time = new Date(+time + TIME_STEP);
-          timeLogger.innerText = time.toString();
-
-          const gmst = satellite.gstime(time);
-          satData.forEach(d => {
-            const eci = satellite.propagate(d.satrec, time);
-            if (eci?.position) {
-              const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-              d.lat = satellite.radiansToDegrees(gdPos.latitude);
-              d.lng = satellite.radiansToDegrees(gdPos.longitude);
-              d.alt = gdPos.height / EARTH_RADIUS_KM;
-            }
-          });
-        })();
-      });
-  </script>
-</body>
-</html>
+        // Force refresh using same reference
+        world.pointsData(world.pointsData());
+      })();
+    });
+</script>
