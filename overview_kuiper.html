@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Orbit Path with Moving Satellite</title>
+  <title>3D Orbit Path</title>
   <style>
     body { margin: 0; background: black; }
     #chart { width: 100vw; height: 100vh; }
@@ -24,9 +24,13 @@
       .pointLng('lng')
       .pointAltitude('alt')
       .pointColor(() => 'yellow')
-      .pointRadius(0.6) // bigger point
-      .arcColor(() => 'orange')
-      .arcStroke(1.5);
+      .pointRadius(0.8)
+      .pathPoints('coords')
+      .pathPointLat('lat')
+      .pathPointLng('lng')
+      .pathPointAlt('alt')
+      .pathColor(() => 'orange')
+      .pathStroke(1.5);
 
     setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
@@ -35,39 +39,33 @@
     const tleLine2 = "2 25544  51.6436  88.6318 0003252  79.8965  34.0224 15.50050624417627";
     const satrec = satellite.twoline2satrec(tleLine1, tleLine2);
 
-    // Build one orbit path (90 min, sampled every 60 sec)
+    // Build orbit polyline (90 min sampled every 60s)
     function buildOrbit(startTime) {
-      const orbitCoords = [];
+      const coords = [];
       for (let t = 0; t < 90 * 60; t += 60) {
         const time = new Date(startTime.getTime() + t * 1000);
         const eci = satellite.propagate(satrec, time);
         if (eci.position) {
           const gmst = satellite.gstime(time);
           const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-          orbitCoords.push({
+          coords.push({
             lat: satellite.radiansToDegrees(gdPos.latitude),
             lng: satellite.radiansToDegrees(gdPos.longitude),
             alt: gdPos.height / EARTH_RADIUS_KM
           });
         }
       }
-      return orbitCoords;
+      return coords;
     }
 
     const now = new Date();
-    const orbit = buildOrbit(now);
+    const orbitPath = buildOrbit(now);
 
-    // Show orbit arc
-    world.arcsData([{
-      startLat: orbit[0].lat,
-      startLng: orbit[0].lng,
-      endLat: orbit[orbit.length-1].lat,
-      endLng: orbit[orbit.length-1].lng,
-      color: 'orange'
-    }]);
+    // Draw orbit line
+    world.pathsData([{ coords: orbitPath }]);
 
-    // Moving satellite point
-    let satPoint = [{ lat: orbit[0].lat, lng: orbit[0].lng, alt: orbit[0].alt }];
+    // Satellite point
+    let satPoint = [{ lat: orbitPath[0].lat, lng: orbitPath[0].lng, alt: orbitPath[0].alt }];
     world.pointsData(satPoint);
 
     // Animate satellite
