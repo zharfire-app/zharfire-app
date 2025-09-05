@@ -1,108 +1,78 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Satellite Constellations Overview</title>
-  <style>
-    body { margin: 0; background: black; }
-    #constellation-select {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 10;
-      font-size: 16px;
-      padding: 4px;
-    }
-    #time-log {
-      position: absolute;
-      font-size: 12px;
-      font-family: sans-serif;
-      padding: 5px;
-      border-radius: 3px;
-      background-color: rgba(200, 200, 200, 0.1);
-      color: lavender;
-      bottom: 10px;
-      right: 10px;
-    }
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
-</head>
-<body>
-  <select id="constellation-select">
-    <option value="starlink">Starlink</option>
-    <option value="kuiper">Kuiper</option>
-    <option value="oneweb">OneWeb</option>
-  </select>
-  <div id="chart"></div>
-  <div id="time-log"></div>
-  <script type="module">
-    import * as satellite from 'https://esm.sh/satellite.js';
+import * as satellite from 'https://esm.sh/satellite.js';
+const TLE_URLS = {
+  starlink: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
+  kuiper: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle',
+  oneweb: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle',
+};
+const EARTH_RADIUS_KM = 6371;
+const TIME_STEP = 1 * 1000;
+const timeLogger = document.getElementById('time-log');
+const world = Globe()(document.getElementById('chart'))
+  .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
+  .particleLat('lat')
+  .particleLng('lng')
+  .particleAltitude('alt')
+  .particlesColor(() => 'palegreen');
+setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
-    const TLE_URLS = {
-      starlink: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
-      kuiper: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle',
-      oneweb: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle',
-    };
+let allSatData = {}; // Keyed by constellation name
+let time = new Date();
 
-    const EARTH_RADIUS_KM = 6371;
-    const TIME_STEP = 1 * 1000;
-    const timeLogger = document.getElementById('time-log');
-    const selectBox = document.getElementById('constellation-select');
-    const world = Globe()(document.getElementById('chart'))
-      .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-      .particleLat('lat')
-      .particleLng('lng')
-      .particleAltitude('alt')
-      .particlesColor(() => 'palegreen');
-      .particlesSize(2);
+async function fetchTle(name) {
+  if (allSatData[name]) return; // Already loaded
+  const r = await fetch(TLE_URLS[name]);
+  const rawData = await r.text();
+  const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).filter(d => d).map(tle => tle.split('\n'));
+  allSatData[name] = tleData.map(([n, ...tle]) => ({
+    satrec: satellite.twoline2satrec(...tle),
+    name: n.trim().replace(/^0 /, '')
+  })).filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
+}
 
-    setTimeout(() => world.pointOfView({ altitude: 3.5 }));
-
-    let satData = [];
-    let time = new Date();
-
-    function fetchAndDisplayTLE(url) {
-      fetch(url)
-        .then(r => r.text())
-        .then(rawData => {
-          const tleData = rawData.replace(/\r/g, '').split(/\n(?=[^12])/).filter(d => d).map(tle => tle.split('\n'));
-          satData = tleData.map(([name, ...tle]) => ({
-            satrec: satellite.twoline2satrec(...tle),
-            name: name.trim().replace(/^0 /, '')
-          })).filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
-        });
-    }
-
-    function updateSatPositions() {
-      time = new Date(+time + TIME_STEP);
-      timeLogger.innerText = time.toString();
-      const gmst = satellite.gstime(time);
-      satData.forEach(d => {
-        const eci = satellite.propagate(d.satrec, time);
-        if (eci?.position) {
-          const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-          d.lat = satellite.radiansToDegrees(gdPos.latitude);
-          d.lng = satellite.radiansToDegrees(gdPos.longitude);
-          d.alt = gdPos.height / EARTH_RADIUS_KM;
-        } else {
-          d.lat = NaN;
-          d.lng = NaN;
-          d.alt = NaN;
-        }
-      });
-      world.particlesData([satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt))]);
-    }
-
-    (function frameTicker() {
-      requestAnimationFrame(frameTicker);
-      updateSatPositions();
-    })();
-
-    // Fetch initial (default) TLE
-    fetchAndDisplayTLE(TLE_URLS[selectBox.value]);
-    selectBox.addEventListener('change', () => {
-      fetchAndDisplayTLE(TLE_URLS[selectBox.value]);
+function updateSatPositions() {
+  time = new Date(+time + TIME_STEP);
+  timeLogger.innerText = time.toString();
+  const gmst = satellite.gstime(time);
+  // Loop all selected constellations
+  let allVisible = [];
+  Object.values(allSatData).forEach(satData => {
+    satData.forEach(d => {
+      const eci = satellite.propagate(d.satrec, time);
+      if (eci?.position) {
+        const gdPos = satellite.eciToGeodetic(eci.position, gmst);
+        d.lat = satellite.radiansToDegrees(gdPos.latitude);
+        d.lng = satellite.radiansToDegrees(gdPos.longitude);
+        d.alt = gdPos.height / EARTH_RADIUS_KM;
+      } else {
+        d.lat = NaN;
+        d.lng = NaN;
+        d.alt = NaN;
+      }
     });
-  </script>
-</body>
-</html>
+    allVisible.push(satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt)));
+  });
+  world.particlesData(allVisible);
+}
+
+(function frameTicker() {
+  requestAnimationFrame(frameTicker);
+  updateSatPositions();
+})();
+
+// Initial load
+const allBoxes = document.querySelectorAll('#checkboxes input[type=checkbox]');
+async function reloadChecked() {
+  // Load new unchecked
+  for (const box of allBoxes) {
+    if (box.checked) await fetchTle(box.value);
+  }
+  // Remove unchecked constellations
+  for (const key in allSatData) {
+    const stillChecked = [...allBoxes].some(b => b.checked && b.value === key);
+    if (!stillChecked) delete allSatData[key];
+  }
+}
+for (const box of allBoxes) {
+  box.addEventListener('change', reloadChecked);
+}
+reloadChecked();
