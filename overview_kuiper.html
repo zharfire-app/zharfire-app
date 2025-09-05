@@ -5,19 +5,6 @@
   <title>Kuiper Satellites Overview</title>
   <style>
     body { margin: 0; background: black; }
-
-    #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      font-family: sans-serif;
-      font-size: 14px;
-      color: white;
-      background: rgba(0,0,0,0.5);
-      padding: 6px 10px;
-      border-radius: 5px;
-    }
-
     #time-log {
       position: absolute;
       font-size: 12px;
@@ -29,48 +16,49 @@
       bottom: 10px;
       right: 10px;
     }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(20,20,20,0.6);
+      color: white;
+      padding: 6px;
+      border-radius: 5px;
+      font-family: sans-serif;
+    }
   </style>
-
-  <!-- Globe.gl -->
   <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
 </head>
 <body>
   <div id="chart"></div>
+  <div id="time-log"></div>
   <div id="controls">
     <label>
-      <input type="checkbox" id="toggleKuiper" />
-      Highlight Kuiper Satellites
+      <input type="checkbox" id="highlightKuiper">
+      Highlight Kuiper
     </label>
   </div>
-  <div id="time-log"></div>
 
   <script type="module">
     import * as satellite from 'https://esm.sh/satellite.js';
 
     const EARTH_RADIUS_KM = 6371;
-    const TIME_STEP = 1000;
+    const TIME_STEP = 1000; // 1 sec per frame
     const timeLogger = document.getElementById('time-log');
-    const toggleKuiper = document.getElementById('toggleKuiper');
+    const highlightToggle = document.getElementById('highlightKuiper');
 
-    let highlightKuiper = false;
-
+    // Globe init
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-      .particleLat('lat')
-      .particleLng('lng')
-      .particleAltitude('alt')
-      .particlesColor(() => highlightKuiper ? 'yellow' : 'palegreen')
-      .particlesSize(2.5)   // make particles bigger (default is ~1)
-      .particlesResolution(8); // smoother round particles
+      .pointLat('lat')
+      .pointLng('lng')
+      .pointAltitude('alt')
+      .pointColor(d => d.highlight ? 'yellow' : 'palegreen')
+      .pointRadius(d => d.highlight ? 0.5 : 0.2);
 
     setTimeout(() => world.pointOfView({ altitude: 3.5 }));
 
-    toggleKuiper.addEventListener('change', () => {
-      highlightKuiper = toggleKuiper.checked;
-      world.particlesColor(() => highlightKuiper ? 'yellow' : 'palegreen');
-      world.particlesSize(highlightKuiper ? 4 : 2.5);
-    });
-
+    // Fetch Kuiper TLEs
     fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
       .then(r => r.text())
       .then(rawData => {
@@ -81,15 +69,28 @@
 
         const satData = tleData.map(([name, ...tle]) => ({
           satrec: satellite.twoline2satrec(...tle),
-          name: name.trim().replace(/^0 /, '')
+          name: name.trim().replace(/^0 /, ''),
+          lat: 0, lng: 0, alt: 0,
+          highlight: false
         }))
         .filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
 
+        // Pass reference once
+        world.pointsData(satData);
+
+        // highlight toggle
+        highlightToggle.addEventListener('change', () => {
+          satData.forEach(d => d.highlight = highlightToggle.checked);
+          world.pointsData(satData); // refresh styles
+        });
+
+        // Animate
         let time = new Date();
         (function frameTicker() {
           requestAnimationFrame(frameTicker);
+
           time = new Date(+time + TIME_STEP);
-          timeLogger.innerText = time.toUTCString();
+          timeLogger.innerText = time.toString();
 
           const gmst = satellite.gstime(time);
           satData.forEach(d => {
@@ -99,14 +100,8 @@
               d.lat = satellite.radiansToDegrees(gdPos.latitude);
               d.lng = satellite.radiansToDegrees(gdPos.longitude);
               d.alt = gdPos.height / EARTH_RADIUS_KM;
-            } else {
-              d.lat = NaN; d.lng = NaN; d.alt = NaN;
             }
           });
-
-          world.particlesData([
-            satData.filter(d => !isNaN(d.lat) && !isNaN(d.lng) && !isNaN(d.alt))
-          ]);
         })();
       });
   </script>
