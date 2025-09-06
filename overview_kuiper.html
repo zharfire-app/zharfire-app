@@ -1,20 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Constellation Viewer</title>
+  <meta charset="UTF-8" />
+  <title>3D Orbit Path + Moving Satellite</title>
   <style>
-    body { margin: 0; background: black; }
+    body { margin: 0; background: #000; }
+    #chart { width: 100vw; height: 100vh; }
     #time-log {
-      position: absolute;
-      font-size: 12px;
-      font-family: sans-serif;
-      padding: 5px;
-      border-radius: 3px;
-      background-color: rgba(200, 200, 200, 0.1);
-      color: lavender;
-      bottom: 10px;
-      right: 10px;
+      position: absolute; bottom: 10px; right: 10px;
+      font: 12px/1.2 system-ui, sans-serif; color: #cfd8ff;
+      background: rgba(255,255,255,.08); padding: 6px 8px; border-radius: 6px;
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
@@ -27,111 +22,101 @@
     import * as satellite from 'https://esm.sh/satellite.js';
 
     const EARTH_RADIUS_KM = 6371;
-    const TIME_STEP = 1 * 1000; // 1 sec/frame
-    const ORBIT_STEP = 60; // seconds per sample along orbit
+    const TIME_STEP_MS = 1000;          // animation step
+    const ORBIT_SAMPLE_STEP_S = 60;     // sample every 60s along orbit
+
     const timeLogger = document.getElementById('time-log');
 
     const world = Globe()(document.getElementById('chart'))
       .globeImageUrl('//cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
+      // moving satellite marker
+      .pointLat('lat')
+      .pointLng('lng')
       .pointAltitude('alt')
       .pointColor(() => 'yellow')
-      .pointRadius(0.4)
-      .arcColor(() => ['cyan', 'cyan'])
-      .arcAltitude(d => d.alt)
-      .arcStroke(0.5);
+      .pointRadius(0.7)
+      // 3D orbit polyline
+      .pathPoints('coords')
+      .pathPointLat('lat')
+      .pathPointLng('lng')
+      .pathPointAlt('alt')
+      .pathColor(() => 'orange')
+      .pathStroke(1.5);
 
-    setTimeout(() => world.pointOfView({ altitude: 3.5 }));
+    setTimeout(() => world.pointOfView({ altitude: 3.5 }), 800);
 
-    // helper to unwrap longitude
-    function unwrapLng(lngArray) {
-      let prev = lngArray[0];
-      return lngArray.map(lng => {
-        let diff = lng - prev;
-        if (diff > 180) lng -= 360;
-        if (diff < -180) lng += 360;
-        prev = lng;
-        return lng;
-      });
+    // ---- Choose a constellation here (example: Kuiper) ----
+    const TLE_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle';
+    // -------------------------------------------------------
+
+    // Build a 3D orbit polyline (lat,lng,alt) for one full period
+    function buildOrbit3D(satrec, startTime) {
+      // Estimate period from mean motion (satrec.no is rad/min)
+      const no_rad_per_min = satrec.no;                       // rad/min
+      const period_s = no_rad_per_min ? (2 * Math.PI / no_rad_per_min) * 60 : 90 * 60;
+
+      const coords = [];
+      for (let t = 0; t <= period_s; t += ORBIT_SAMPLE_STEP_S) {
+        const time = new Date(startTime.getTime() + t * 1000);
+        const pv = satellite.propagate(satrec, time);
+        if (!pv?.position) continue;
+
+        const gmst = satellite.gstime(time); // IMPORTANT: compute per sample
+        const gd = satellite.eciToGeodetic(pv.position, gmst);
+
+        coords.push({
+          lat: satellite.radiansToDegrees(gd.latitude),
+          lng: satellite.radiansToDegrees(gd.longitude),
+          alt: gd.height / EARTH_RADIUS_KM
+        });
+      }
+
+      // Option 2: close the loop by repeating the first point at the end
+      if (coords.length > 1) coords.push({ ...coords[0] });
+
+      return coords;
     }
 
-    // Load TLEs (example: Kuiper)
-    fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=kuiper&FORMAT=tle')
+    // Fetch TLEs, show first satellite’s orbit + moving dot (expand as needed)
+    fetch(TLE_URL)
       .then(r => r.text())
-      .then(rawData => {
-        const tleData = rawData.replace(/\r/g, '')
-          .split(/\n(?=[^12])/)
-          .filter(d => d)
-          .map(tle => tle.split('\n'));
+      .then(raw => {
+        const tleSets = raw.replace(/\r/g, '')
+          .split(/\n(?=[^12])/).filter(Boolean)
+          .map(block => block.split('\n'));
 
-        const satData = tleData.map(([name, ...tle]) => ({
-          satrec: satellite.twoline2satrec(...tle),
-          name: name.trim().replace(/^0 /, '')
-        })).filter(d => !!satellite.propagate(d.satrec, new Date())?.position);
+        // Use the first good sat as a demo (you can loop them all)
+        const entry = tleSets.find(lines => lines.length >= 3);
+        const name = entry[0].trim().replace(/^0 /, '');
+        const satrec = satellite.twoline2satrec(entry[1], entry[2]);
 
-        // compute orbits for each sat
-        satData.forEach(d => {
-          const coords = [];
-          const lats = [], lngs = [], alts = [];
-          const now = new Date();
-          const gmst = satellite.gstime(now);
+        // Build and render orbit path
+        const now = new Date();
+        const orbitCoords = buildOrbit3D(satrec, now);
+        world.pathsData([{ name, coords: orbitCoords }]);
 
-          for (let t = 0; t <= 90 * 60; t += ORBIT_STEP) { // ~90 min orbit
-            const eci = satellite.propagate(d.satrec, new Date(+now + t * 1000));
-            if (eci?.position) {
-              const gd = satellite.eciToGeodetic(eci.position, gmst);
-              lats.push(satellite.radiansToDegrees(gd.latitude));
-              lngs.push(satellite.radiansToDegrees(gd.longitude));
-              alts.push(gd.height / EARTH_RADIUS_KM);
-            }
-          }
+        // Moving point (floating)
+        const satPoint = [{ lat: orbitCoords[0].lat, lng: orbitCoords[0].lng, alt: orbitCoords[0].alt }];
+        world.pointsData(satPoint);
 
-          const smoothLngs = unwrapLng(lngs);
-          for (let i = 0; i < lats.length; i++) {
-            coords.push({
-              lat: lats[i],
-              lng: smoothLngs[i],
-              alt: alts[i]
-            });
-          }
-          d.orbit = coords;
-        });
+        // Animate
+        let simTime = new Date();
+        (function tick() {
+          requestAnimationFrame(tick);
+          simTime = new Date(simTime.getTime() + TIME_STEP_MS);
+          timeLogger.textContent = simTime.toUTCString();
 
-        // Set arcs for orbits
-        const arcs = satData.flatMap(d => {
-          const pairs = [];
-          for (let i = 0; i < d.orbit.length - 1; i++) {
-            pairs.push({
-              startLat: d.orbit[i].lat,
-              startLng: d.orbit[i].lng,
-              endLat: d.orbit[i+1].lat,
-              endLng: d.orbit[i+1].lng,
-              alt: d.orbit[i].alt
-            });
-          }
-          return pairs;
-        });
+          const pv = satellite.propagate(satrec, simTime);
+          if (!pv?.position) return;
+          const gmst = satellite.gstime(simTime);
+          const gd = satellite.eciToGeodetic(pv.position, gmst);
 
-        world.arcsData(arcs);
+          satPoint[0].lat = satellite.radiansToDegrees(gd.latitude);
+          satPoint[0].lng = satellite.radiansToDegrees(gd.longitude);
+          satPoint[0].alt = gd.height / EARTH_RADIUS_KM;
 
-        // Animate satellites
-        let time = new Date();
-        (function frameTicker() {
-          requestAnimationFrame(frameTicker);
-          time = new Date(+time + TIME_STEP);
-          timeLogger.innerText = time.toString();
-
-          const gmst = satellite.gstime(time);
-          satData.forEach(d => {
-            const eci = satellite.propagate(d.satrec, time);
-            if (eci?.position) {
-              const gd = satellite.eciToGeodetic(eci.position, gmst);
-              d.lat = satellite.radiansToDegrees(gd.latitude);
-              d.lng = satellite.radiansToDegrees(gd.longitude);
-              d.alt = gd.height / EARTH_RADIUS_KM;
-            }
-          });
-
-          world.pointsData(satData.filter(d => !isNaN(d.lat)));
+          // Reassign same reference to trigger refresh
+          world.pointsData(world.pointsData());
         })();
       });
   </script>
